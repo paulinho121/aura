@@ -20,14 +20,11 @@ body {
   height: 100vh;
   width: 100vw;
   user-select: none;
-  cursor: none;
 }
 
 button,
 a,
-[role="button"] {
-  cursor: none !important;
-}
+[role="button"] {}
 
 canvas {
   display: block;
@@ -77,4 +74,50 @@ canvas {
 /* Scrollbar hide */
 ::-webkit-scrollbar {
   display: none;
+}
+
+/* Custom Animations */
+@keyframes pulseSlow {
+
+  0%,
+  100% {
+    opacity: 0.4;
+    filter: brightness(1);
+  }
+
+  50% {
+    opacity: 0.8;
+    filter: brightness(1.5);
+  }
+}
+
+.animate-pulse-slow {
+  animation: pulseSlow 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes loadingBar {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  50% {
+    transform: translateX(0%);
+  }
+
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-loading-bar {
+  animation: loadingBar 3s ease-in-out infinite;
+}
+
+/* Glass Enhancement */
+.glass-heavy {
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(80px);
+  -webkit-backdrop-filter: blur(80px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
 }

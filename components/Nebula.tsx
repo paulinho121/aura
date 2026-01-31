@@ -1,5 +1,5 @@
 
-import React, { useEffect, useRef, useMemo } from 'react';
+import React, { useEffect, useRef, useMemo, useState } from 'react';
 import * as d3 from 'd3';
 import { Pulse, UserProfile } from '../types';
 
@@ -8,6 +8,9 @@ interface NebulaProps {
   users: UserProfile[];
   onSelectPulse: (pulse: Pulse) => void;
   onSelectUser: (user: UserProfile) => void;
+  activeView: string;
+  onViewChange: (view: any) => void;
+  currentUser: UserProfile | null;
 }
 
 const COLORS = [
@@ -18,29 +21,31 @@ const COLORS = [
   { core: '#ffcc00', glow: 'rgba(255, 204, 0, 0.4)', trail: 'rgba(255, 204, 0, 0.1)' },
 ];
 
-const Nebula: React.FC<NebulaProps> = ({ pulses, users, onSelectPulse, onSelectUser }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const mouseRef = useRef({ x: 0, y: 0, targetX: 0, targetY: 0 });
 
-  const stars = useMemo(() => {
-    return Array.from({ length: 800 }).map(() => ({
+const Nebula: React.FC<NebulaProps> = ({ pulses, users, onSelectPulse, onSelectUser, activeView, onViewChange, currentUser }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const mouseRef = useRef({ x: 0, y: 0, targetX: 0, targetY: 0, isDown: false });
+  const [activePhrase, setActivePhrase] = useState<{ text: string, x: number, y: number, alpha: number, color: string } | null>(null);
+
+  // Background Nebula Particles (Deep Layer)
+  const cosmicDust = useMemo(() => {
+    return Array.from({ length: 15 }).map(() => ({
       x: Math.random(),
       y: Math.random(),
-      z: Math.random() * 3 + 0.5,
-      size: Math.random() * 1.5 + 0.2,
-      opacity: Math.random() * 0.6 + 0.2,
-      speed: Math.random() * 0.04 + 0.01
+      size: Math.random() * 400 + 200,
+      color: COLORS[Math.floor(Math.random() * COLORS.length)].glow,
+      vx: (Math.random() - 0.5) * 0.0005,
+      vy: (Math.random() - 0.5) * 0.0005,
     }));
   }, []);
 
-  const nebulae = useMemo(() => {
-    return Array.from({ length: 8 }).map((_, i) => ({
+  const stars = useMemo(() => {
+    return Array.from({ length: 500 }).map(() => ({
       x: Math.random(),
       y: Math.random(),
-      size: Math.random() * 0.6 + 0.3,
-      color: COLORS[i % COLORS.length].glow,
-      vx: (Math.random() - 0.5) * 0.00008,
-      vy: (Math.random() - 0.5) * 0.00008
+      size: Math.random() * 1.5,
+      blink: Math.random() * 0.05 + 0.01,
+      seed: Math.random() * 10,
     }));
   }, []);
 
@@ -56,123 +61,130 @@ const Nebula: React.FC<NebulaProps> = ({ pulses, users, onSelectPulse, onSelectU
     canvas.width = width;
     canvas.height = height;
 
+    // Creative Physics: Cluster Logic
+    // Bots are attracted to "Gravity Centers" (Real Users)
     const nodes = users.map((u, i) => {
-      const resonanceLevel = (u as any).totalResonance || 0;
-      const userColor = u.color || COLORS[i % COLORS.length].core;
-      const colorSet = {
-        core: userColor,
-        glow: u.color ? `${u.color}33` : COLORS[i % COLORS.length].glow.replace('0.4', '0.15'),
-        trail: u.color ? `${u.color}11` : COLORS[i % COLORS.length].trail
-      };
+      const isBot = u.id.startsWith('bot-');
+      const isMe = u.id === currentUser?.id;
+      const resonance = (u as any).totalResonance || 0;
+
+      // Determine galaxy center: Real users are seeds for clusters
+      const realUsers = users.filter(usr => !usr.id.startsWith('bot-'));
+      const seedUser = realUsers.length > 0 ? realUsers[i % realUsers.length] : null;
 
       return {
         ...u,
         x: Math.random() * width,
         y: Math.random() * height,
-        radius: (u.lastPulseAt ? 32 : 18) * (1 + resonanceLevel * 0.15),
-        totalResonance: resonanceLevel,
-        color: colorSet,
-        angle: Math.random() * Math.PI * 2,
-        rotationSpeed: (Math.random() - 0.5) * 0.03,
-        orbiters: Array.from({ length: 3 + Math.min(resonanceLevel, 15) }).map((_, oi) => ({
-          dist: 50 + (oi * 20) * (1 + resonanceLevel * 0.1),
-          angle: Math.random() * Math.PI * 2,
-          speed: (Math.random() - 0.5) * (0.07 / (oi + 1)),
-          size: Math.random() * 5 + 1,
-          isPlanet: oi % 3 === 0
-        }))
+        vx: 0,
+        vy: 0,
+        radius: isMe ? 15 : (isBot ? (4 + Math.random() * 4) : (25 + resonance * 5)),
+        color: u.color || COLORS[i % COLORS.length].core,
+        isBot,
+        isMe,
+        phase: Math.random() * Math.PI * 2,
+        pulseSpeed: 0.02 + Math.random() * 0.03,
+        // Gravity link to a real user "sun"
+        sunId: seedUser?.id,
       };
     });
 
-    // Custom Resonance Attraction Force
-    const resonanceForce = (alpha: number) => {
-      for (let i = 0; i < nodes.length; i++) {
-        for (let j = i + 1; j < nodes.length; j++) {
-          const nodeA = nodes[i] as any;
-          const nodeB = nodes[j] as any;
-
-          // Calculate similarity based on totalResonance or color (simplified)
-          const similarity = 1 - Math.abs(nodeA.totalResonance - nodeB.totalResonance) / 20;
-          if (similarity > 0.8) {
-            const dx = nodeB.x - nodeA.x;
-            const dy = nodeB.y - nodeA.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist < 600) {
-              const strength = (similarity * 0.0001) * alpha;
-              nodeA.vx += dx * strength;
-              nodeA.vy += dy * strength;
-              nodeB.vx -= dx * strength;
-              nodeB.vy -= dy * strength;
+    const simulation = d3.forceSimulation(nodes as any)
+      .alphaTarget(0.1)
+      .velocityDecay(0.15) // Slightly higher decay for smoother motion
+      // Charge force: subtle repulsion between all
+      .force('charge', d3.forceManyBody().strength((d: any) => d.isBot ? -15 : -1500))
+      // Gravity cluster: bots are pulled towards center or their "Sun"
+      .force('cluster', (alpha: number) => {
+        nodes.forEach((d: any) => {
+          if (d.isBot && d.sunId) {
+            const sun = nodes.find(n => n.id === d.sunId);
+            if (sun) {
+              d.vx += (sun.x - d.x) * 0.001 * alpha;
+              d.vy += (sun.y - d.y) * 0.001 * alpha;
             }
           }
-        }
-      }
-    };
-
-    const simulation = d3.forceSimulation(nodes as any)
-      .force('charge', d3.forceManyBody().strength((d: any) => -1000 * (1 + d.totalResonance * 0.3)))
-      .force('center', d3.forceCenter(width / 2, height / 2))
-      .force('collision', d3.forceCollide().radius((d: any) => (d.radius + (d.orbiters.length * 25)) + 50))
-      .force('resonance', resonanceForce)
-      .alphaDecay(0.01);
+        });
+      })
+      .force('collide', d3.forceCollide().radius((d: any) => d.isMe ? 60 : (d.isBot ? 20 : 100)).strength(1))
+      .force('center', d3.forceCenter(width / 2, height / 2).strength(0.015));
 
     let frame = 0;
     const render = () => {
       frame++;
-      mouseRef.current.x += (mouseRef.current.targetX - mouseRef.current.x) * 0.05;
-      mouseRef.current.y += (mouseRef.current.targetY - mouseRef.current.y) * 0.05;
-      const mx = (mouseRef.current.x - width / 2) * 0.02;
-      const my = (mouseRef.current.y - height / 2) * 0.02;
 
-      // CRITICAL FIX: Reset composite operation to clear background correctly
+      // 1. CINEMATIC BACKGROUND
       ctx.globalCompositeOperation = 'source-over';
-      ctx.fillStyle = '#010205';
+      ctx.fillStyle = '#020408';
       ctx.fillRect(0, 0, width, height);
 
-      // 1. Nebulae
-      ctx.globalCompositeOperation = 'screen';
-      nebulae.forEach(neb => {
-        neb.x += neb.vx; neb.y += neb.vy;
-        const gx = (neb.x * width + mx * 0.5) % width;
-        const gy = (neb.y * height + my * 0.5) % height;
-        const grad = ctx.createRadialGradient(gx, gy, 0, gx, gy, width * neb.size);
-        grad.addColorStop(0, neb.color);
+      // Deep Atmospheric Glows
+      const glows = [
+        { x: width * 0.2, y: height * 0.3, r: width * 0.8, c: 'rgba(112, 0, 255, 0.12)' },
+        { x: width * 0.8, y: height * 0.7, r: width * 0.8, c: 'rgba(0, 255, 255, 0.12)' },
+        { x: width * 0.5, y: height * 0.5, r: width * 0.6, c: 'rgba(255, 255, 255, 0.03)' }
+      ];
+
+      glows.forEach(g => {
+        const grad = ctx.createRadialGradient(g.x, g.y, 0, g.x, g.y, g.r);
+        grad.addColorStop(0, g.c);
         grad.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, width, height);
       });
 
-      // 2. Parallax Stars
-      ctx.globalCompositeOperation = 'source-over';
-      stars.forEach(star => {
-        const sx = (star.x * width + mx * star.z) % width;
-        const sy = (star.y * height + my * star.z) % height;
-        ctx.globalAlpha = star.opacity * (Math.sin(frame * star.speed) * 0.4 + 0.6);
-        ctx.fillStyle = '#fff';
-        ctx.beginPath();
-        const rx = sx < 0 ? sx + width : sx;
-        const ry = sy < 0 ? sy + height : sy;
-        ctx.arc(rx, ry, star.size, 0, Math.PI * 2);
-        ctx.fill();
+      // Deep Nebula Smoke (More organic)
+      ctx.globalCompositeOperation = 'screen';
+      cosmicDust.forEach(cloud => {
+        cloud.x = (cloud.x + cloud.vx + 1) % 1;
+        cloud.y = (cloud.y + cloud.vy + 1) % 1;
+        const gx = cloud.x * width;
+        const gy = cloud.y * height;
+        const g = ctx.createRadialGradient(gx, gy, 0, gx, gy, cloud.size);
+        g.addColorStop(0, cloud.color.replace('0.4', '0.05'));
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, width, height);
       });
 
-      // 3. Resonance Filaments (Proximity Connections)
+      // Sharp Stars with Parallax
+      ctx.globalCompositeOperation = 'source-over';
+      stars.forEach(s => {
+        const alpha = Math.sin(frame * s.blink + s.seed) * 0.5 + 0.5;
+        ctx.globalAlpha = alpha * 0.3;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        // Subtle Mouse parallax
+        const px = (mouseRef.current.targetX - width / 2) * 0.01;
+        const py = (mouseRef.current.targetY - height / 2) * 0.01;
+        ctx.arc(s.x * width + px, s.y * height + py, s.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1.0;
+      });
+
+      // Vignette Overlay (THE KEY FOR PREMIUM LOOK)
+      const vignette = ctx.createRadialGradient(width / 2, height / 2, width * 0.2, width / 2, height / 2, width * 0.8);
+      vignette.addColorStop(0, 'rgba(0,0,0,0)');
+      vignette.addColorStop(1, 'rgba(0,0,0,0.6)');
+      ctx.fillStyle = vignette;
+      ctx.fillRect(0, 0, width, height);
+
+      // 2. COSMIC WEB (Neural Connections)
       ctx.globalCompositeOperation = 'screen';
-      ctx.beginPath();
-      for (let i = 0; i < nodes.length; i++) {
-        for (let j = i + 1; j < nodes.length; j++) {
-          const a = nodes[i] as any;
+      ctx.lineWidth = 0.3;
+      for (let i = 0; i < nodes.length; i += 5) { // Sub-sample for performance
+        const a = nodes[i] as any;
+        if (a.isBot) continue; // Only connections from real users to bots or among users
+
+        for (let j = 0; j < nodes.length; j += 15) {
           const b = nodes[j] as any;
           const dx = a.x - b.x;
           const dy = a.y - b.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < 400) {
-            const opacity = (1 - dist / 400) * 0.2;
-            const grad = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
-            grad.addColorStop(0, `${a.color.core}${Math.floor(opacity * 255).toString(16).padStart(2, '0')}`);
-            grad.addColorStop(1, `${b.color.core}${Math.floor(opacity * 255).toString(16).padStart(2, '0')}`);
-            ctx.strokeStyle = grad;
-            ctx.lineWidth = 0.5;
+          const d2 = dx * dx + dy * dy;
+          if (d2 < 250 * 250) {
+            ctx.beginPath();
+            ctx.strokeStyle = a.color;
+            ctx.globalAlpha = (1 - Math.sqrt(d2) / 250) * 0.15;
             ctx.moveTo(a.x, a.y);
             ctx.lineTo(b.x, b.y);
             ctx.stroke();
@@ -180,71 +192,190 @@ const Nebula: React.FC<NebulaProps> = ({ pulses, users, onSelectPulse, onSelectU
         }
       }
 
-      // 4. User Systems
+      // 3. ENTITIES (ORBS & ROCKETS)
       nodes.forEach((node: any) => {
         ctx.save();
         ctx.translate(node.x, node.y);
-        node.angle += node.rotationSpeed;
 
-        // Atmosphere Glow
-        const aura = ctx.createRadialGradient(0, 0, node.radius * 0.8, 0, 0, node.radius * 6);
-        aura.addColorStop(0, node.color.glow);
-        aura.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = aura;
-        ctx.globalAlpha = 1.0;
-        ctx.beginPath();
-        ctx.arc(0, 0, node.radius * 6, 0, Math.PI * 2);
-        ctx.fill();
+        if (node.isMe) {
+          // --- INNOVATIVE: THE PRISMATIC VOYAGER ---
+          const velocity = Math.sqrt(node.vx * node.vx + node.vy * node.vy);
+          const angle = Math.atan2(node.vy, node.vx) + Math.PI / 2;
+          ctx.rotate(angle);
 
-        // Orbiting Entities
-        node.orbiters.forEach((orb: any) => {
-          orb.angle += orb.speed;
-          const ox = Math.cos(orb.angle) * orb.dist;
-          const oy = Math.sin(orb.angle) * orb.dist;
-          ctx.fillStyle = orb.isPlanet ? '#fff' : node.color.core;
-          ctx.globalAlpha = orb.isPlanet ? 0.9 : 0.3;
-          ctx.beginPath();
-          ctx.arc(ox, oy, orb.isPlanet ? orb.size * 2 : orb.size, 0, Math.PI * 2);
-          ctx.fill();
-        });
-
-        // Core Image/Aura
-        ctx.globalAlpha = 1.0;
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(0, 0, node.radius, 0, Math.PI * 2);
-        ctx.clip();
-        if (node.portraitUrl) {
-          const img = new Image();
-          img.src = node.portraitUrl;
-          if (img.complete) ctx.drawImage(img, -node.radius, -node.radius, node.radius * 2, node.radius * 2);
-        }
-        const innerGlow = ctx.createRadialGradient(0, 0, node.radius * 0.4, 0, 0, node.radius);
-        innerGlow.addColorStop(0, 'rgba(0,0,0,0)');
-        innerGlow.addColorStop(1, node.color.core);
-        ctx.fillStyle = innerGlow;
-        ctx.fill();
-        ctx.restore();
-
-        // Label
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-        ctx.font = `900 ${Math.max(12, 11 + node.totalResonance * 1.5)}px Syncopate`;
-        ctx.letterSpacing = '6px';
-        ctx.textAlign = 'center';
-        ctx.fillText(node.name.toUpperCase(), 0, node.radius + 70);
-
-        // Activity Pulse
-        if (node.lastPulseAt) {
-          const p = (frame % 240) / 240;
-          ctx.beginPath();
-          ctx.strokeStyle = node.color.core;
+          // 1. Orbital Rings (Consciousness Halo)
           ctx.lineWidth = 1;
-          ctx.globalAlpha = 1 - p;
-          ctx.arc(0, 0, node.radius + (p * 150), 0, Math.PI * 2);
-          ctx.stroke();
+          for (let i = 0; i < 3; i++) {
+            const r = 25 + i * 10 + Math.sin(frame * 0.05 + i) * 5;
+            const rot = frame * (0.02 + i * 0.01);
+            ctx.save();
+            ctx.rotate(rot);
+            ctx.strokeStyle = `rgba(34, 211, 238, ${0.3 - i * 0.1})`;
+            ctx.beginPath();
+            ctx.ellipse(0, 0, r, r * 0.4, 0, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+          }
+
+          // 2. The Prismatic Body (Double-Pointed Diamond)
+          const bodyG = ctx.createLinearGradient(0, -25, 0, 25);
+          bodyG.addColorStop(0, '#fff');
+          bodyG.addColorStop(0.5, '#22d3ee');
+          bodyG.addColorStop(1, '#7000ff');
+
+          ctx.shadowBlur = 15;
+          ctx.shadowColor = '#22d3ee';
+
+          ctx.beginPath();
+          ctx.moveTo(0, -25); // Top
+          ctx.lineTo(12, 5);  // Right
+          ctx.lineTo(0, 15);  // Bottom inner
+          ctx.lineTo(-12, 5); // Left
+          ctx.closePath();
+          ctx.fillStyle = bodyG;
+          ctx.fill();
+
+          ctx.shadowBlur = 0;
+
+          // 3. Singularity Drive (Instead of fire)
+          const pulseEffect = Math.sin(frame * 0.2) * 0.5 + 0.5;
+          const g = ctx.createRadialGradient(0, 18, 0, 0, 18, 15 + velocity * 10);
+          g.addColorStop(0, '#fff');
+          g.addColorStop(0.2, '#22d3ee');
+          g.addColorStop(0.5, 'rgba(112, 0, 255, 0.4)');
+          g.addColorStop(1, 'rgba(0,0,0,0)');
+
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.arc(0, 18, 15 + velocity * 10 * pulseEffect, 0, Math.PI * 2);
+          ctx.fill();
+
+          // 4. Inner Core (Nucleus)
+          ctx.beginPath();
+          ctx.arc(0, 0, 3, 0, Math.PI * 2);
+          ctx.fillStyle = '#fff';
+          ctx.fill();
+
+          // Label
+          ctx.rotate(-angle);
+          ctx.fillStyle = '#fff';
+          ctx.font = '900 12px Syncopate';
+          ctx.letterSpacing = '8px';
+          ctx.textAlign = 'center';
+          ctx.shadowBlur = 10;
+          ctx.shadowColor = '#fff';
+          ctx.fillText(node.name.toUpperCase(), 0, 60);
+          ctx.shadowBlur = 0;
+        } else {
+          // RENDER ORB (BOTS OR OTHER USERS)
+          const pulse = Math.sin(frame * node.pulseSpeed + node.phase) * 0.15 + 1;
+          const currentR = node.radius * pulse;
+
+          if (!node.isBot) {
+            // REAL USER SYSTEM (Like ZION in the image)
+
+            // 1. Orbiting Satellites
+            // White Satellite (Close)
+            const orbit1 = frame * 0.02 + node.phase;
+            const sat1X = Math.cos(orbit1) * (currentR + 15);
+            const sat1Y = Math.sin(orbit1) * (currentR + 15);
+
+            ctx.beginPath();
+            ctx.arc(sat1X, sat1Y, currentR * 0.4, 0, Math.PI * 2);
+            ctx.fillStyle = '#e0f7fa';
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#fff';
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+            // Teal Satellite (Farther)
+            const orbit2 = frame * -0.01 + node.phase * 2;
+            const sat2X = Math.cos(orbit2) * (currentR + 30);
+            const sat2Y = Math.sin(orbit2) * (currentR + 30);
+
+            ctx.beginPath();
+            ctx.arc(sat2X, sat2Y, currentR * 0.25, 0, Math.PI * 2);
+            ctx.fillStyle = '#00838f';
+            ctx.fill();
+
+            // 2. Main Glowing Core
+            const g = ctx.createRadialGradient(0, 0, 0, 0, 0, currentR * 1.5);
+            g.addColorStop(0, node.color);
+            g.addColorStop(0.8, node.color);
+            g.addColorStop(1, 'rgba(0,0,0,0)');
+
+            ctx.beginPath();
+            ctx.arc(0, 0, currentR * 1.5, 0, Math.PI * 2);
+            ctx.fillStyle = g;
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = node.color;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+            // Internal Highlight (The soft crescent look)
+            ctx.beginPath();
+            ctx.arc(0, 0, currentR * 1.2, 0, Math.PI * 2);
+            const ringG = ctx.createLinearGradient(-currentR, -currentR, currentR, currentR);
+            ringG.addColorStop(0, 'rgba(255,255,255,0.2)');
+            ringG.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = ringG;
+            ctx.fill();
+
+          } else {
+            // BOT ORB (Simpler)
+            const g = ctx.createRadialGradient(0, 0, 0, 0, 0, currentR * 4);
+            g.addColorStop(0, node.color);
+            g.addColorStop(0.2, node.color.slice(0, 7) + '44');
+            g.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = g;
+            ctx.globalAlpha = 0.4;
+            ctx.beginPath();
+            ctx.arc(0, 0, currentR * 4, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.globalAlpha = 1.0;
+            ctx.beginPath();
+            ctx.arc(0, 0, currentR, 0, Math.PI * 2);
+            ctx.fillStyle = '#fff';
+            ctx.fill();
+          }
+
+          // Label
+          const dist = Math.sqrt(Math.pow(node.x - mouseRef.current.targetX, 2) + Math.pow(node.y - mouseRef.current.targetY, 2));
+          if (!node.isBot || dist < 100) {
+            ctx.fillStyle = node.isBot ? 'rgba(255,255,255,0.3)' : '#fff';
+            ctx.font = '900 12px Syncopate';
+            ctx.letterSpacing = '8px';
+            ctx.textAlign = 'center';
+            // Position it lower as in the image
+            ctx.fillText(node.name.toUpperCase(), 0, currentR + 70);
+          }
         }
+
         ctx.restore();
       });
+
+      // 4. FLOATING WHISPERS
+      if (activePhrase) {
+        ctx.save();
+        ctx.translate(activePhrase.x, activePhrase.y);
+        ctx.globalAlpha = activePhrase.alpha;
+        ctx.fillStyle = activePhrase.color;
+        ctx.font = 'italic 500 18px "Inter", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.letterSpacing = '1px';
+
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = activePhrase.color;
+
+        // Efeito de "subida ao céu"
+        const offsetY = -60 - (1 - activePhrase.alpha) * 100;
+        ctx.fillText(activePhrase.text.toUpperCase(), 0, offsetY);
+
+        ctx.restore();
+        setActivePhrase(prev => prev ? { ...prev, alpha: prev.alpha - 0.008 } : null);
+        if (activePhrase.alpha <= 0) setActivePhrase(null);
+      }
 
       requestAnimationFrame(render);
     };
@@ -255,7 +386,6 @@ const Nebula: React.FC<NebulaProps> = ({ pulses, users, onSelectPulse, onSelectU
       width = window.innerWidth; height = window.innerHeight;
       canvas.width = width; canvas.height = height;
       simulation.force('center', d3.forceCenter(width / 2, height / 2));
-      simulation.alpha(1).restart();
     };
 
     const handleMouseMove = (e: MouseEvent) => {
@@ -265,30 +395,73 @@ const Nebula: React.FC<NebulaProps> = ({ pulses, users, onSelectPulse, onSelectU
 
     const handleClick = (e: MouseEvent) => {
       const mx = e.clientX; const my = e.clientY;
-      const clickedNode = nodes.find((n: any) => {
+      const clicked = nodes.find((n: any) => {
         const dx = n.x - mx; const dy = n.y - my;
-        return Math.sqrt(dx * dx + dy * dy) < n.radius + 60;
+        return Math.sqrt(dx * dx + dy * dy) < n.radius + 30;
       });
-      if (clickedNode) onSelectUser(clickedNode as any);
+      if (clicked) {
+        setActivePhrase({
+          text: clicked.vibe,
+          x: clicked.x,
+          y: clicked.y,
+          alpha: 1.0,
+          color: clicked.isBot ? '#ffffff' : clicked.color
+        });
+        onSelectUser(clicked as any);
+      }
     };
 
     window.addEventListener('resize', handleResize);
     window.addEventListener('mousemove', handleMouseMove);
-    canvas.addEventListener('click', handleClick);
+    canvas.addEventListener('mousedown', handleClick);
 
     return () => {
       cancelAnimationFrame(animId);
       simulation.stop();
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('mousemove', handleMouseMove);
-      canvas.removeEventListener('click', handleClick);
+      canvas.removeEventListener('mousedown', handleClick);
     };
-  }, [users, pulses]);
+  }, [users, pulses, activePhrase]);
 
   return (
-    <div className="fixed inset-0 z-0 bg-[#010205]">
-      <canvas ref={canvasRef} className="block w-full h-full cursor-crosshair" />
-      <div className="absolute inset-0 pointer-events-none opacity-[0.06] bg-[url('https://www.transparenttextures.com/patterns/stardust.png')]" />
+    <div className="fixed inset-0 z-0 bg-[#010204]">
+      <canvas ref={canvasRef} className="block w-full h-full" />
+
+      {/* Dock Area */}
+      <div className="absolute bottom-12 left-1/2 -translate-x-1/2 z-50">
+        <div className="relative group">
+          {/* Animated Glow Backdrop */}
+          <div className="absolute -inset-1 bg-gradient-to-r from-cyan-500/20 via-purple-500/20 to-cyan-500/20 rounded-[3rem] blur-xl opacity-50 group-hover:opacity-100 transition-opacity duration-1000" />
+
+          <div className="relative flex items-center space-x-12 px-14 py-6 bg-black/60 backdrop-blur-[40px] rounded-[3rem] border border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.8)]">
+            {['NEBULOSA', 'PULSAR', 'ESSÊNCIA'].map((item) => {
+              const isActive = (item === 'NEBULOSA' && activeView === 'NEBULOSA') ||
+                (item === 'PULSAR' && activeView === 'PULSAR') ||
+                (item === 'ESSÊNCIA' && activeView === 'ESSÊNCIA');
+
+              return (
+                <button
+                  key={item}
+                  onClick={() => onViewChange(item)}
+                  className="relative group/btn"
+                >
+                  <span className={`text-[10px] tracking-[0.6em] font-black transition-all duration-500 block ${isActive ? 'text-cyan-400' : 'text-white/30 group-hover/btn:text-white/60'}`}>
+                    {item}
+                  </span>
+                  {isActive && (
+                    <div className="absolute -bottom-2 left-1.5 right-1.5 h-0.5 bg-cyan-400 rounded-full shadow-[0_0_10px_#22d3ee]" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Atmospheric Noise Overlay */}
+      <div className="fixed inset-0 pointer-events-none opacity-[0.03] contrast-150 mix-blend-overlay"
+        style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/asfalt-dark.png")' }} />
     </div>
   );
 };
