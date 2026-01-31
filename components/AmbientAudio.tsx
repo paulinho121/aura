@@ -17,7 +17,12 @@ const NATURE_MODES: NatureMode[] = [
     { name: 'DESPERTAR MATINAL', description: 'Cânticos da floresta ao amanhecer', type: 'birds', baseFreq: 432, beatFreq: 4.0, color: 'text-yellow-400' },
 ];
 
-const AmbientAudio: React.FC = () => {
+
+interface AmbientAudioProps {
+    energy?: number;
+}
+
+const AmbientAudio: React.FC<AmbientAudioProps> = ({ energy = 0.5 }) => {
     const [isPlaying, setIsPlaying] = useState(false);
     const [currentMode, setCurrentMode] = useState(0);
     const [showSelector, setShowSelector] = useState(false);
@@ -156,6 +161,22 @@ const AmbientAudio: React.FC = () => {
         setIsPlaying(!isPlaying);
     };
 
+
+    useEffect(() => {
+        if (isPlaying && activeNodes.current.length > 0) {
+            // Dynamically adjust oscillators based on energy
+            activeNodes.current.forEach(node => {
+                if (node instanceof OscillatorNode && node.type === 'sine') {
+                    const isBase = node.frequency.value < 600;
+                    if (isBase) {
+                        const targetFreq = NATURE_MODES[currentMode].baseFreq + (energy * 10 - 5);
+                        node.frequency.setTargetAtTime(targetFreq, audioCtx.current!.currentTime, 0.5);
+                    }
+                }
+            });
+        }
+    }, [energy, isPlaying]);
+
     useEffect(() => {
         if (isPlaying) {
             stopAudio();
@@ -166,67 +187,77 @@ const AmbientAudio: React.FC = () => {
     const activeMode = NATURE_MODES[currentMode];
 
     return (
-        <div className="fixed top-8 right-8 z-[60] flex flex-col items-end space-y-4">
-            <div className="flex items-center space-x-6 bg-black/40 backdrop-blur-3xl p-6 rounded-[2rem] border border-white/5 shadow-2xl transition-all duration-1000 group">
-                <div className="flex flex-col items-end mr-4">
-                    <span className={`text-[8px] tracking-[0.6em] uppercase font-black mb-1 transition-colors duration-1000 ${activeMode.color}`}>
-                        {activeMode.name}
-                    </span>
-                    <button
-                        onClick={() => setShowSelector(!showSelector)}
-                        className="text-[10px] text-white/30 hover:text-white tracking-[0.4em] uppercase transition-all flex items-center"
-                    >
-                        Trocar Santuário
-                    </button>
-                    <div className="text-[7px] text-white/10 uppercase tracking-widest mt-2">{activeMode.description}</div>
-                </div>
-
-                <button
-                    onClick={toggleAudio}
-                    className={`relative w-14 h-14 flex items-center justify-center rounded-full border transition-all duration-1000 ${isPlaying ? 'border-white/30 bg-white/5 shadow-[0_0_50px_rgba(255,255,255,0.05)]' : 'border-white/10 hover:border-white/30'}`}
-                >
-                    <div className={`absolute inset-0 rounded-full border border-white/10 animate-[spin_20s_linear_infinite] ${!isPlaying && 'hidden'}`} />
-
-                    {isPlaying ? (
-                        <div className="flex items-end space-x-1.5 h-4">
-                            {[0, 0.4, 0.2].map((delay, i) => (
-                                <div
-                                    key={i}
-                                    className="w-1 bg-white/30 rounded-full animate-[naturePulse_3s_ease-in-out_infinite]"
-                                    style={{ animationDelay: `${delay}s` }}
-                                />
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="w-4 h-0.5 bg-white/10 rounded-full" />
-                    )}
-                </button>
+        <div
+            className="fixed top-8 right-8 z-[60] flex flex-col items-end group/audio"
+            onMouseLeave={() => setShowSelector(false)}
+        >
+            {/* 🌟 The Audio Star (Trigger) */}
+            <div className={`relative w-12 h-12 flex items-center justify-center cursor-pointer transition-all duration-1000 ${showSelector ? 'opacity-0 scale-50' : 'opacity-100 scale-100'}`}>
+                <div className={`absolute inset-0 rounded-full bg-cyan-400/20 blur-xl animate-pulse ${!isPlaying && 'opacity-0'}`} />
+                <div className={`w-1 h-1 rounded-full bg-white shadow-[0_0_15px_rgba(255,255,255,0.8)] transition-all duration-500 group-hover/audio:scale-[3]`} />
+                {/* Visual ring when playing */}
+                <div className={`absolute inset-0 border border-white/10 rounded-full animate-[spin_10s_linear_infinite] ${!isPlaying && 'hidden'}`} />
             </div>
 
-            {showSelector && (
-                <div className="bg-[#020408]/95 backdrop-blur-3xl border border-white/5 p-6 rounded-[2.5rem] w-80 shadow-[0_0_100px_rgba(0,0,0,0.9)] animate-in fade-in zoom-in duration-700">
-                    <div className="space-y-4">
+            {/* Main Selector Panel (Visible on Group Hover) */}
+            <div className={`flex flex-col items-end space-y-4 transition-all duration-1000 absolute top-0 right-0 origin-top-right ${showSelector ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 -translate-y-4 pointer-events-none group-hover/audio:opacity-100 group-hover/audio:scale-100 group-hover/audio:translate-y-0 group-hover/audio:pointer-events-auto'}`}>
+                <div className="flex items-center space-x-6 glass-dark p-6 rounded-[2rem] border border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.6)]">
+                    <div className="flex flex-col items-end mr-4">
+                        <span className={`text-[8px] tracking-[0.6em] uppercase font-black mb-1 transition-colors duration-1000 ${activeMode.color}`}>
+                            {activeMode.name}
+                        </span>
+                        <div className="text-[9px] text-white/40 tracking-[0.4em] uppercase font-bold">Santuário Ativo</div>
+                        <div className="text-[7px] text-white/10 uppercase tracking-widest mt-2 max-w-[150px] text-right">{activeMode.description}</div>
+                    </div>
+
+                    <button
+                        onClick={toggleAudio}
+                        className={`relative w-14 h-14 flex items-center justify-center rounded-full border transition-all duration-1000 ${isPlaying ? 'border-white/30 bg-white/5 shadow-[0_0_50px_rgba(255,255,255,0.05)]' : 'border-white/10 hover:border-white/30'}`}
+                    >
+                        <div className={`absolute inset-0 rounded-full border border-white/10 animate-[spin_20s_linear_infinite] ${!isPlaying && 'hidden'}`} />
+
+                        {isPlaying ? (
+                            <div className="flex items-end space-x-1.5 h-4">
+                                {[0, 0.4, 0.2].map((delay, i) => (
+                                    <div
+                                        key={i}
+                                        className="w-1 bg-white/30 rounded-full animate-[naturePulse_3s_ease-in-out_infinite]"
+                                        style={{ animationDelay: `${delay}s` }}
+                                    />
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="w-4 h-0.5 bg-white/10 rounded-full" />
+                        )}
+                    </button>
+                </div>
+
+                <div className="glass-dark p-8 rounded-[3rem] w-[22rem] shadow-[0_40px_100px_rgba(0,0,0,0.8)] border-white/10">
+                    <div className="space-y-3">
+                        <div className="text-[10px] tracking-[0.8em] text-white/20 uppercase font-black mb-8 pl-1">Mudar Frequência</div>
                         {NATURE_MODES.map((mode, idx) => (
                             <button
                                 key={mode.name}
                                 onClick={() => {
                                     setCurrentMode(idx);
-                                    setShowSelector(false);
                                     if (!isPlaying) toggleAudio();
                                 }}
-                                className={`w-full text-left p-5 rounded-3xl border transition-all duration-500 group relative overflow-hidden ${currentMode === idx ? 'bg-white/5 border-white/10' : 'border-transparent hover:bg-white/[0.03]'}`}
+                                className={`w-full text-left p-6 rounded-[2rem] border transition-all duration-500 group/btn relative overflow-hidden ${currentMode === idx ? 'bg-white/5 border-white/20' : 'border-transparent hover:bg-white/[0.04] hover:border-white/10'}`}
                             >
-                                <div className={`text-[10px] font-bold tracking-[0.5em] uppercase mb-2 ${mode.color}`}>
+                                <div className={`text-[11px] font-black tracking-[0.5em] uppercase mb-2 ${mode.color} group-hover/btn:drop-shadow-[0_0_8px_currentColor]`}>
                                     {mode.name}
                                 </div>
-                                <div className="text-[11px] text-white/20 font-light leading-relaxed group-hover:text-white/50 transition-colors">
+                                <div className="text-[10px] text-white/30 font-medium leading-relaxed group-hover/btn:text-white/60 transition-colors tracking-tight">
                                     {mode.description}
                                 </div>
+                                {currentMode === idx && (
+                                    <div className="absolute right-6 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-cyan-400 shadow-[0_0_10px_#22d3ee]" />
+                                )}
                             </button>
                         ))}
                     </div>
                 </div>
-            )}
+            </div>
 
             <style>{`
                 @keyframes naturePulse {

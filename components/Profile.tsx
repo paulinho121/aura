@@ -2,13 +2,17 @@
 import React from 'react';
 import { UserProfile } from '../types';
 
+
 interface ProfileProps {
-  user: UserProfile;
+  user: UserProfile & { totalResonance?: number };
   isOwn: boolean;
   onClose: () => void;
+  onGenerateSeed?: () => void;
 }
 
-const ProfileView: React.FC<ProfileProps> = ({ user, isOwn, onClose }) => {
+const ProfileView: React.FC<ProfileProps> = ({ user, isOwn, onClose, onGenerateSeed }) => {
+  const canGenerateSeed = isOwn && (user.totalResonance || 0) >= 5;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#020408]/90 backdrop-blur-3xl p-6">
       <div className="absolute inset-0 pointer-events-none overflow-hidden text-white/5 font-header text-[20vh] opacity-10 flex items-center justify-center select-none">
@@ -40,31 +44,46 @@ const ProfileView: React.FC<ProfileProps> = ({ user, isOwn, onClose }) => {
               </div>
             </header>
 
-            <div className="grid grid-cols-2 gap-12 py-10 border-y border-white/5">
+            <div className="grid grid-cols-3 gap-8 py-10 border-y border-white/5">
               <div className="space-y-2">
                 <div className="text-4xl font-light text-white tracking-tighter">{user.pulseCount}</div>
-                <div className="text-[9px] tracking-[0.3em] text-white/30 uppercase font-bold">Pulsos Realizados</div>
+                <div className="text-[9px] tracking-[0.3em] text-white/30 uppercase font-bold">Pulsos</div>
+              </div>
+              <div className="space-y-2">
+                <div className="text-4xl font-light text-white tracking-tighter">{user.totalResonance || 0}</div>
+                <div className="text-[9px] tracking-[0.3em] text-white/30 uppercase font-bold">Ressonância</div>
               </div>
               <div className="space-y-2">
                 <div className="text-4xl font-light text-white tracking-tighter">{user.seedCount}</div>
-                <div className="text-[9px] tracking-[0.3em] text-white/30 uppercase font-bold">Sementes de Consciência</div>
+                <div className="text-[9px] tracking-[0.3em] text-white/30 uppercase font-bold">Sementes</div>
               </div>
             </div>
 
             <div className="space-y-10">
-              <p className="text-white/40 font-light italic text-lg leading-relaxed max-w-md">
+              <p className="text-white/40 font-light italic text-sm leading-relaxed max-w-md">
                 {isOwn
-                  ? "Sua imagem evolui a cada pulso. O silêncio prolongado desbotará sua essência na nebulosa primordial."
+                  ? "Sua imagem evolui a cada pulso. Sacrifique ressonância para semear novos portais."
                   : "Esta consciência manifestou-se na rede através de um convite humano sagrado."}
               </p>
 
-              <button
-                onClick={onClose}
-                className="group relative px-12 py-4 border border-white/10 hover:border-white/40 transition-all duration-500 rounded-full text-[10px] font-bold tracking-[0.6em] text-white/60 hover:text-white uppercase overflow-hidden"
-              >
-                <div className="absolute inset-0 bg-white/5 translate-y-full group-hover:translate-y-0 transition-transform duration-500" />
-                <span className="relative z-10">Fechar Essência</span>
-              </button>
+              <div className="flex flex-wrap gap-6 justify-center md:justify-start">
+                <button
+                  onClick={onClose}
+                  className="px-12 py-4 border border-white/10 hover:border-white/40 transition-all rounded-full text-[10px] font-bold tracking-[0.5em] text-white/60 hover:text-white uppercase"
+                >
+                  Fechar
+                </button>
+
+                {isOwn && (
+                  <button
+                    disabled={!canGenerateSeed}
+                    onClick={onGenerateSeed}
+                    className={`px-12 py-4 rounded-full text-[10px] font-bold tracking-[0.5em] uppercase transition-all ${canGenerateSeed ? 'bg-cyan-500 text-black hover:scale-105 shadow-[0_0_30px_rgba(34,211,238,0.3)]' : 'bg-white/5 text-white/10 grayscale cursor-not-allowed'}`}
+                  >
+                    Gerar Semente (-5 Ressonância)
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
