@@ -8,6 +8,7 @@ import ProfileView from './components/Profile';
 import Intro from './components/Intro';
 import IdentitySetup from './components/IdentitySetup';
 import AmbientAudio from './components/AmbientAudio';
+import CustomCursor from './components/CustomCursor';
 import { azureService } from './services/azureService';
 
 // Mock initial data as fallback
@@ -167,6 +168,7 @@ const App: React.FC = () => {
 
   return (
     <div className="relative min-h-screen w-full bg-[#010205] select-none overflow-hidden font-header">
+      <CustomCursor />
       <AmbientAudio energy={collectiveEnergy} />
       {view === 'INTRO' && (
         <Intro

@@ -17,37 +17,34 @@ export class AuraAIService {
   }
 
   /**
-   * Generates a symbolic portrait description. 
-   * In a production environment with Imagen/DALL-E, this would trigger an image generation.
+   * Generates a symbolic portrait URL based on the user's vibration and visual prompt.
+   * This uses Pollinations AI to generate a unique, real-time image for the user.
    */
   async generateSymbolicPortrait(traits: string): Promise<string | null> {
     try {
-      const prompt = `Describe a highly abstract, symbolic portrait of a consciousness defined by: ${traits}. 
-      Include iridescent textures, bioluminescent organic structures, and sacred geometry. 
-      Limit to 2 sentences. Focus on colors and light.`;
+      // Enhanced prompt synthesis for high-quality artistic results
+      const artisticPrompt = `Highly detailed, abstract symbolic portrait of consciousness, defined by ${traits}, iridescent textures, bioluminescent organic structures, sacred geometry, cosmic light, deep obsidian background, 8k resolution, ethereal, by Alberto Seveso and Peter Mohrbacher.`;
 
-      const model = this.ai.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
+      const encodedPrompt = encodeURIComponent(artisticPrompt);
+      const seed = Math.floor(Math.random() * 1000000);
 
-      // Use the seed for some variability in the placeholder while we don't have real GEN-AI Image API
-      return `https://picsum.photos/seed/${encodeURIComponent(traits + response.text().slice(0, 10))}/800/800`;
+      // Using Pollinations AI for actual image generation from the prompt
+      return `https://image.pollinations.ai/prompt/${encodedPrompt}?seed=${seed}&width=1024&height=1024&nologo=true`;
     } catch (error) {
+      console.error("Image generation failed:", error);
       return `https://picsum.photos/seed/${encodeURIComponent(traits)}/800/800`;
     }
   }
 
   async generatePulseVisual(content: string, mood: string): Promise<string | null> {
     try {
-      const prompt = `Synthesize a visual frequency for this manifest: "${content}". 
-      Mood: ${mood}. Style: Cosmic bioluminescence, deep obsidian background, intricate light filaments.`;
+      const prompt = `Cosmic bioluminescence manifest: "${content}". Mood: ${mood}. Style: deep obsidian background, intricate light filaments, sacred geometry, highly detailed, ethereal 8k.`;
+      const encodedPrompt = encodeURIComponent(prompt);
+      const seed = Math.floor(Math.random() * 1000000);
 
-      const model = this.ai.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-
-      return `https://picsum.photos/seed/${encodeURIComponent(content.slice(0, 20))}/1200/675`;
+      return `https://image.pollinations.ai/prompt/${encodedPrompt}?seed=${seed}&width=1280&height=720&nologo=true`;
     } catch (error) {
+      console.error("Pulse image generation failed:", error);
       return `https://picsum.photos/seed/pulse-${Date.now()}/1200/675`;
     }
   }

@@ -12,11 +12,14 @@ const IdentitySetup: React.FC<IdentitySetupProps> = ({ onComplete, onCancel }) =
     const [step, setStep] = useState(1); // 1: Name, 2: Vibe, 3: Generating, 4: Reveal
     const [name, setName] = useState('');
     const [vibe, setVibe] = useState('');
+    const [imagePrompt, setImagePrompt] = useState('');
     const [portraitUrl, setPortraitUrl] = useState('');
 
     const handleGenerate = async () => {
         setStep(3);
-        const url = await auraAI.generateSymbolicPortrait(vibe);
+        // Prioritize imagePrompt, use vibe as fallback if prompt is empty
+        const promptToUse = imagePrompt ? `${imagePrompt} (Vibe: ${vibe})` : vibe;
+        const url = await auraAI.generateSymbolicPortrait(promptToUse);
         if (url) {
             setPortraitUrl(url);
             setStep(4);
@@ -82,20 +85,35 @@ const IdentitySetup: React.FC<IdentitySetupProps> = ({ onComplete, onCancel }) =
                 )}
 
                 {step === 2 && (
-                    <div className="space-y-16 text-center animate-in fade-in slide-in-from-bottom-8 duration-1000">
+                    <div className="space-y-12 text-center animate-in fade-in slide-in-from-bottom-8 duration-1000">
                         <div className="space-y-4">
                             <span className="text-cyan-400/40 text-[10px] tracking-[0.8em] uppercase">Sintonizando Essência</span>
-                            <h2 className="text-5xl font-bold tracking-[0.5em] text-white">QUAL A SUA VIBRE HOJE?</h2>
-                            <p className="text-white/30 text-sm font-light italic">A IA usará isso para tecer seu retrato simbólico.</p>
+                            <h2 className="text-4xl font-bold tracking-[0.5em] text-white">DEFINA SUA MANIFESTAÇÃO</h2>
                         </div>
-                        <textarea
-                            autoFocus
-                            value={vibe}
-                            onChange={(e) => setVibe(e.target.value)}
-                            className="w-full bg-transparent border-b border-white/10 p-8 text-2xl text-center font-light focus:outline-none focus:border-cyan-400 transition-all text-white placeholder:text-white/5 resize-none h-48 leading-relaxed"
-                            placeholder="Ex: Explorador etéreo em busca de silêncio..."
-                        />
-                        <div className="flex justify-center space-x-8">
+
+                        <div className="grid md:grid-cols-2 gap-8 text-left">
+                            <div className="space-y-4 bg-white/[0.02] p-6 rounded-3xl border border-white/5">
+                                <label className="text-[9px] tracking-[0.3em] text-cyan-400/60 uppercase font-black">Estado Emocional (Vibe)</label>
+                                <textarea
+                                    value={vibe}
+                                    onChange={(e) => setVibe(e.target.value)}
+                                    className="w-full bg-transparent p-2 text-lg font-light focus:outline-none focus:border-cyan-400 transition-all text-white placeholder:text-white/10 resize-none h-32 leading-relaxed"
+                                    placeholder="Ex: Melancolia serena, euforia cósmica..."
+                                />
+                            </div>
+
+                            <div className="space-y-4 bg-white/[0.02] p-6 rounded-3xl border border-white/5">
+                                <label className="text-[9px] tracking-[0.3em] text-purple-400/60 uppercase font-black">Prompt Visual (Imagem)</label>
+                                <textarea
+                                    value={imagePrompt}
+                                    onChange={(e) => setImagePrompt(e.target.value)}
+                                    className="w-full bg-transparent p-2 text-lg font-light focus:outline-none focus:border-purple-400 transition-all text-white placeholder:text-white/10 resize-none h-32 leading-relaxed"
+                                    placeholder="Ex: Uma nebulosa em forma de lótus com raios esmeralda..."
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex justify-center space-x-8 pt-8">
                             <button onClick={() => setStep(1)} className="text-white/20 hover:text-white transition-all uppercase tracking-[0.4em] text-[10px] font-bold">Voltar</button>
                             <button
                                 disabled={!vibe}
