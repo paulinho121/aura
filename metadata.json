@@ -1,0 +1,7 @@
+{
+  "name": "AURA - O Ritual Digital",
+  "description": "Uma rede social disruptiva focada em presença, intenção e significado, onde cada interação é um ritual único gerado por IA.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
